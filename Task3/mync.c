@@ -116,10 +116,34 @@ void handle_tcp_server(int port, int port2, char opt, char opt2, char** args) {
 
 }
 
+void parse_tcpc_string(const char *str, char *ip, int *port) {
+    // Find the position of the comma
+    const char *comma_pos = strchr(str, ',');
+    if (!comma_pos) {
+        // Comma not found, unable to parse
+        *port = -1;
+        return;
+    }
+    
+    // Calculate the length of the IP address or hostname
+    int ip_length = comma_pos - (str + 4); // Length of "TCPC"
+    if (ip_length <= 0) {
+        // Invalid IP address or hostname
+        *port = -1;
+        return;
+    }
 
-void handle_tcp_client(const char *host, int port)
+    // Copy the IP address or hostname
+    strncpy(ip, str + 4, ip_length);
+    ip[ip_length] = '\0'; // Null-terminate the string
+
+    // Extract the port number and convert it to an integer
+    *port = atoi(comma_pos + 1);
+}
+
+void handle_tcp_client(const char *host, int port, char opt)
 {
-    int client_socket;
+    int client_socket, server_socket;
     struct sockaddr_in server_address;
 
     client_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -142,7 +166,9 @@ void handle_tcp_client(const char *host, int port)
         perror("connect");
         exit(EXIT_FAILURE);
     }
+    server_socket = s_socket_tcp(port);
 
+    
     dup2(client_socket, STDIN_FILENO);
     close(client_socket);
 }
@@ -154,7 +180,7 @@ int main(int argc, char *argv[])
     char *input = NULL;
     char *output = NULL;
     int port = 0;
-    char *host = NULL;
+    char host[120] = {0};
     int server_socket;
     int both = 0;
     int port2 = 0;
@@ -188,8 +214,7 @@ int main(int argc, char *argv[])
     {
         print_usage(argv[0]);
         return EXIT_FAILURE;
-    }
-
+    }    
     // Create a child process
     pid_t pid = fork();
 
@@ -197,7 +222,9 @@ int main(int argc, char *argv[])
     {
         perror("fork");
         return EXIT_FAILURE;
-    }
+    } 
+    
+    
 
     if (pid == 0)
     {
@@ -214,16 +241,22 @@ int main(int argc, char *argv[])
         if(output == NULL && input == NULL)
             execv(args[0], args);
 
-        else if(strncmp(input, "TCPS", 4) == 0 && both == 1)
+        else if(both == 1 && (input, "TCPS", 4) == 0)
         {
             port = atoi(input + 4);
             handle_tcp_server(port, 0, 'b', ' ', args);
         }
   
-        else if (output == NULL && strncmp(input, "TCPS", 4) == 0) //TCPS AND I 
+        else if (input != NULL && strncmp(input, "TCPS", 4) == 0) //TCPS AND I 
         {
             port = atoi(input + 4);
             handle_tcp_server(port, 0, 'i', ' ', args);
+        }
+
+        else if(output != NULL && strncmp(output, "TCPS", 4) == 0)
+        {
+            port = atoi(output + 4);
+            handle_tcp_server(port, 0, 'o', ' ', args);
         }
 
         else if(output != NULL && input != NULL && strncmp(input, "TCPS", 4) == 0 && strncmp(output, "TCPS", 4) == 0)
@@ -233,12 +266,16 @@ int main(int argc, char *argv[])
             handle_tcp_server(port, port2, 'i', 'o', args);
         }
 
-        else if(input == NULL && strncmp(output, "TCPS", 4) == 0)
-        {
-            port = atoi(output + 4);
-            handle_tcp_server(port, 0, 'o', ' ', args);
+        else if(output != NULL && strncmp(output, "TCPC", 4) == 0){
+            parse_tcpc_string(output, host, &port);
+            handle_tcp_client(host, port, 'i');
         }
-        
+
+        else if(input != NULL && strncmp(input, "TCPC", 4) == 0){
+            parse_tcpc_string(input, host, &port);
+            handle_tcp_client(host, port, 'i');
+        }
+
         else
         {
             print_usage(argv[0]);
