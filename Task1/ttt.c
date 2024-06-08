@@ -78,7 +78,7 @@ int main(int argc, char *argv[])
             printf("Error\n");
             return 1;
         }
-        fprintf(stdout"%c\n", move);
+        fprintf(stdout,"%c\n", move);
 
         board[move - '1'] = 'X';
         if (check_winner(board, 'X')) {
