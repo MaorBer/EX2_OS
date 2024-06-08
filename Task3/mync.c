@@ -177,7 +177,6 @@ int main(int argc, char *argv[])
             both = 1;
             input = optarg;
             output = optarg;
-
             break;
         default:
             print_usage(argv[0]);
@@ -185,11 +184,11 @@ int main(int argc, char *argv[])
         }
     }
 
-    /*if (command == NULL || (input == NULL && output == NULL))
+    if (command == NULL || (input == NULL && output == NULL))
     {
         print_usage(argv[0]);
         return EXIT_FAILURE;
-    }*/
+    }
 
     // Create a child process
     pid_t pid = fork();
@@ -214,6 +213,12 @@ int main(int argc, char *argv[])
         // Child process
         if(output == NULL && input == NULL)
             execv(args[0], args);
+
+        else if(strncmp(input, "TCPS", 4) == 0 && both == 1)
+        {
+            port = atoi(input + 4);
+            handle_tcp_server(port, 0, 'b', ' ', args);
+        }
   
         else if (output == NULL && strncmp(input, "TCPS", 4) == 0) //TCPS AND I 
         {
@@ -234,12 +239,6 @@ int main(int argc, char *argv[])
             handle_tcp_server(port, 0, 'o', ' ', args);
         }
         
-        else if(strncmp(input, "TCPS", 4) == 0 && both)
-        {
-            port = atoi(input + 4);
-            handle_tcp_server(port, 0, 'b', ' ', args);
-        }
-
         else
         {
             print_usage(argv[0]);
