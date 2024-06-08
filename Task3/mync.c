@@ -141,19 +141,20 @@ void parse_tcpc_string(const char *str, char *ip, int *port) {
     *port = atoi(comma_pos + 1);
 }
 
-void handle_tcp_client(const char *host, int port, char opt)
+
+void handle_tcp_client(const char *host, int port, char opt, char opt2, char** args)
 {
     int client_socket, server_socket;
+    client_socket = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in server_address;
 
-    client_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (client_socket == -1)
     {
         perror("socket");
         exit(EXIT_FAILURE);
     }
 
-    server_address.sin_family = AF_INET;
+    server_address.sin_family = host;
     server_address.sin_port = htons(port);
     if (inet_pton(AF_INET, host, &server_address.sin_addr) <= 0)
     {
@@ -168,8 +169,37 @@ void handle_tcp_client(const char *host, int port, char opt)
     }
     server_socket = s_socket_tcp(port);
 
+    if (opt == 'i' && opt2 == ' '){
+        dup2(server_socket, STDOUT_FILENO);
+        execv(args[0], args);
+    }
+
+    else if(opt == 'o' && opt2 == ' '){
+        dup2(server_socket, STDIN_FILENO);
+        execv(args[0], args);
+    }
+
+    else if(opt == 'b' && opt2 == ' '){
+        dup2(server_socket, STDOUT_FILENO);
+        dup2(server_socket, STDIN_FILENO);
+        execv(args[0], args);
+    }
+
+    else if(opt == 'i' && opt2 == 'o')
+    {
+        dup2(server_socket, STDIN_FILENO);
+        dup2(client_socket2, STDOUT_FILENO);
+        execv(args[0], args);
+    }
+
+    else if(opt == 'o' && opt2 == 'i')
+    {
+        dup2(client_socket2, STDIN_FILENO);
+        dup2(client_socket, STDOUT_FILENO);
+        execv(args[0], args);
+    }
+
     
-    dup2(client_socket, STDIN_FILENO);
     close(client_socket);
 }
 
@@ -181,6 +211,7 @@ int main(int argc, char *argv[])
     char *output = NULL;
     int port = 0;
     char host[120] = {0};
+    char host2[120] = {0};
     int server_socket;
     int both = 0;
     int port2 = 0;
@@ -266,15 +297,32 @@ int main(int argc, char *argv[])
             handle_tcp_server(port, port2, 'i', 'o', args);
         }
 
-        else if(output != NULL && strncmp(output, "TCPC", 4) == 0){
-            parse_tcpc_string(output, host, &port);
-            handle_tcp_client(host, port, 'i');
-        }
+        
 
         else if(input != NULL && strncmp(input, "TCPC", 4) == 0){
             parse_tcpc_string(input, host, &port);
-            handle_tcp_client(host, port, 'i');
+            handle_tcp_client(host, port, 'i', ' ',args);
         }
+
+        else if(output != NULL && strncmp(output, "TCPC", 4) == 0){
+            parse_tcpc_string(output, host, &port);
+            handle_tcp_client(host, port, 'o', ' ', args);
+        }
+
+        else if(both == 1 && strncmp(output, "TCPC", 4) == 0){
+            parse_tcpc_string(output, host, &port);
+            handle_tcp_client(host, port, 'b', ' ',args);
+        }
+
+        else if(output != NULL && input != NULL && strncmp(input, "TCPC", 4) == 0 && strncmp(output, "TCPC", 4) == 0)
+        {
+            parse_tcpc_string(output, host, &port);
+            parse_tcpc_string(output, host2, &port2);
+
+            handle_tcp_server(port, port2, 'i', 'o', args);
+        }
+
+
 
         else
         {
