@@ -150,44 +150,34 @@ void handle_tcp_client(const char *host, const char *host2, int port, int port2,
 {
     int client_socket, server_socket;
     client_socket = socket(AF_INET, SOCK_STREAM, 0);
-    struct sockaddr_in server_address;
+    struct sockaddr_in client_server;
+    socklen_t socklen = sizeof(client_server);
+    client_socket = socket(AF_INET, SOCK_STREAM, 0);
 
-    if (client_socket == -1)
+    client_server.sin_family =AF_INET;
+    client_server.sin_port = htons(port);
+    client_server.sin_addr.s_addr = inet_addr(host);
+
+    if(connect(client_socket, (struct sockaddr *) &client_server, socklen)==-1)
     {
-        perror("socket");
-        exit(EXIT_FAILURE);
-    }
-
-
-    server_address.sin_family = AF_INET/6;
-    server_address.sin_port = htons(port);
-
-    if (inet_pton(AF_INET, host, &server_address.sin_addr) < 0)
-    {
-        perror("inet_pton");
-        exit(EXIT_FAILURE);
-    }
-
-    if (connect(client_socket, (struct sockaddr *)&server_address, sizeof(server_address)) == -1)
-    {
-        perror("connect");
-        exit(EXIT_FAILURE);
+        perror("connect");   
+        exit(1); 
     }
     
     if (opt == 'i' && opt2 == ' '){
-        dup2(server_socket, STDIN_FILENO);
+        dup2(client_socket, STDIN_FILENO);
         execv(args[0], args);
     }
      
 
     else if(opt == 'o' && opt2 == ' '){
-        dup2(server_socket, STDOUT_FILENO);
+        dup2(client_socket, STDOUT_FILENO);
         execv(args[0], args);
     }
 
     else if(opt == 'b' && opt2 == ' '){
-        dup2(server_socket, STDOUT_FILENO);
-        dup2(server_socket, STDIN_FILENO);
+        dup2(client_socket, STDOUT_FILENO);
+        dup2(client_socket, STDIN_FILENO);
         execv(args[0], args);
     }
 
