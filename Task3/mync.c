@@ -142,7 +142,7 @@ void parse_tcpc_string(const char *str, char *ip, int *port) {
 }
 
 
-void handle_tcp_client(const char *host, int port, char opt, char opt2, char** args)
+void handle_tcp_client(const char *host, const char *host2, int port, int port2, char opt, char opt2, char** args)
 {
     int client_socket, server_socket;
     client_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -156,6 +156,7 @@ void handle_tcp_client(const char *host, int port, char opt, char opt2, char** a
 
     server_address.sin_family = host;
     server_address.sin_port = htons(port);
+    
     if (inet_pton(AF_INET, host, &server_address.sin_addr) <= 0)
     {
         perror("inet_pton");
@@ -185,21 +186,38 @@ void handle_tcp_client(const char *host, int port, char opt, char opt2, char** a
         execv(args[0], args);
     }
 
-    else if(opt == 'i' && opt2 == 'o')
-    {
-        dup2(server_socket, STDIN_FILENO);
-        dup2(client_socket2, STDOUT_FILENO);
-        execv(args[0], args);
+    if(port2 != '0'){
+        int client_socket2, server_socket2;
+        client_socket2 = socket(AF_INET, SOCK_STREAM, 0);
+        struct sockaddr_in server_address2;
+        server_address2.sin_family = host2;
+        server_address2.sin_port = htons(port2);
+        if (inet_pton(AF_INET, host2, &server_address2.sin_addr) <= 0){
+            perror("inet_pton");
+            exit(EXIT_FAILURE);
+        }
+
+         if (connect(client_socket2, (struct sockaddr *)&server_address2, sizeof(server_address2)) == -1){
+             perror("connect");
+             exit(EXIT_FAILURE);
+        }
+        
+        server_socket2 = s_socket_tcp(port2);
+
+        if(opt == 'i' && opt2 == 'o'){
+                 dup2(server_socket, STDIN_FILENO);
+                 dup2(server_socket2, STDOUT_FILENO);
+                 execv(args[0], args);
+            }
+
+        else if(opt == 'o' && opt2 == 'i'){
+                dup2(server_socket, STDIN_FILENO);
+                dup2(server_socket2, STDOUT_FILENO);
+                execv(args[0], args);
+           }
     }
 
-    else if(opt == 'o' && opt2 == 'i')
-    {
-        dup2(client_socket2, STDIN_FILENO);
-        dup2(client_socket, STDOUT_FILENO);
-        execv(args[0], args);
-    }
-
-    
+    close(server_socket);
     close(client_socket);
 }
 
@@ -297,21 +315,19 @@ int main(int argc, char *argv[])
             handle_tcp_server(port, port2, 'i', 'o', args);
         }
 
-        
-
         else if(input != NULL && strncmp(input, "TCPC", 4) == 0){
             parse_tcpc_string(input, host, &port);
-            handle_tcp_client(host, port, 'i', ' ',args);
+            handle_tcp_client(host, '0', port, 0, 'i', ' ',args);
         }
 
         else if(output != NULL && strncmp(output, "TCPC", 4) == 0){
             parse_tcpc_string(output, host, &port);
-            handle_tcp_client(host, port, 'o', ' ', args);
+            handle_tcp_client(host, '0', port, 0, 'o', ' ', args);
         }
 
         else if(both == 1 && strncmp(output, "TCPC", 4) == 0){
             parse_tcpc_string(output, host, &port);
-            handle_tcp_client(host, port, 'b', ' ',args);
+            handle_tcp_client(host, '0', port, 0, 'b', ' ',args);
         }
 
         else if(output != NULL && input != NULL && strncmp(input, "TCPC", 4) == 0 && strncmp(output, "TCPC", 4) == 0)
@@ -319,33 +335,27 @@ int main(int argc, char *argv[])
             parse_tcpc_string(output, host, &port);
             parse_tcpc_string(output, host2, &port2);
 
-            handle_tcp_server(port, port2, 'i', 'o', args);
+            handle_tcp_client(host, host2, port, port2, 'i', 'o', args);
         }
-
-
-
-        else
-        {
+        else{
             print_usage(argv[0]);
             return EXIT_FAILURE;
         }
     }
-    else
-    {
+    
+    else{
         // Parent process
         int status;
-        if (waitpid(pid, &status, 0) == -1)
-        {
+        if (waitpid(pid, &status, 0) == -1){
             perror("waitpid");
             return EXIT_FAILURE;
         }
 
-        if (WIFEXITED(status))
-        {
+        if (WIFEXITED(status)){
             printf("Child exited with status %d\n", WEXITSTATUS(status));
         }
-        else if (WIFSIGNALED(status))
-        {
+        
+        else if (WIFSIGNALED(status)){
             printf("Child killed by signal %d\n", WTERMSIG(status));
         }
     }
