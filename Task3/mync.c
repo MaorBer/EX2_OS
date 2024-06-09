@@ -148,17 +148,17 @@ void parse_tcpc_string(const char *str, char *ip, int *port) {
 
 void handle_tcp_client(const char *host, const char *host2, int port, int port2, char opt, char opt2, char** args)
 {
-    int client_socket, server_socket;
+    int client_socket;
     client_socket = socket(AF_INET, SOCK_STREAM, 0);
-    struct sockaddr_in client_server;
-    socklen_t socklen = sizeof(client_server);
+    struct sockaddr_in server;
+    socklen_t socklen = sizeof(server);
     client_socket = socket(AF_INET, SOCK_STREAM, 0);
 
-    client_server.sin_family =AF_INET;
-    client_server.sin_port = htons(port);
-    client_server.sin_addr.s_addr = inet_addr(host);
+    server.sin_family =AF_INET;
+    server.sin_port = htons(port);
+    server.sin_addr.s_addr = inet_addr(host);
 
-    if(connect(client_socket, (struct sockaddr *) &client_server, socklen)==-1)
+    if(connect(client_socket, (struct sockaddr *) &server, socklen)==-1)
     {
         perror("connect");   
         exit(1); 
@@ -176,8 +176,9 @@ void handle_tcp_client(const char *host, const char *host2, int port, int port2,
     }
 
     else if(opt == 'b' && opt2 == ' '){
-        dup2(client_socket, STDOUT_FILENO);
         dup2(client_socket, STDIN_FILENO);
+
+        dup2(client_socket, STDOUT_FILENO);
         execv(args[0], args);
     }
 
@@ -207,19 +208,18 @@ void handle_tcp_client(const char *host, const char *host2, int port, int port2,
         
 
         if(opt == 'i' && opt2 == 'o'){
-                 dup2(server_socket, STDIN_FILENO);
-                 dup2(server_socket2, STDOUT_FILENO);
+                 dup2(client_socket, STDIN_FILENO);
+                 dup2(client_socket2, STDOUT_FILENO);
                  execv(args[0], args);
             }
 
         else if(opt == 'o' && opt2 == 'i'){
-                dup2(server_socket, STDIN_FILENO);
-                dup2(server_socket2, STDOUT_FILENO);
+                dup2(client_socket, STDIN_FILENO);
+                dup2(client_socket2, STDOUT_FILENO);
                 execv(args[0], args);
            }
     }
 
-    close(server_socket);
     close(client_socket);
 }
 
@@ -289,8 +289,10 @@ int main(int argc, char *argv[])
         }
         args[arg_count] = NULL;
         // Child process
+
         if(output == NULL && input == NULL)
             execv(args[0], args);
+
 
         else if(both == 1 && (input, "TCPS", 4) == 0)
         {
@@ -319,7 +321,6 @@ int main(int argc, char *argv[])
 
         else if(input != NULL && strncmp(input, "TCPC", 4) == 0){
             parse_tcpc_string(input, host, &port);
-            printf("No\n");
             handle_tcp_client(host, 0, port, 0, 'i', ' ',args);
         }
 
