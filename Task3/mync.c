@@ -154,11 +154,12 @@ void handle_tcp_client(const char *host, const char *host2, int port, int port2,
         exit(EXIT_FAILURE);
     }
 
-    server_address.sin_family = host;
+    server_socket = s_socket_tcp(port);
+
+    server_address.sin_family = AF_INET;
     server_address.sin_port = htons(port);
 
-
-    if (inet_pton(AF_INET, host, &server_address.sin_addr) <= 0)
+    if (inet_pton(AF_INET, host, &server_address.sin_addr) < 0)
     {
         perror("inet_pton");
         exit(EXIT_FAILURE);
@@ -170,7 +171,6 @@ void handle_tcp_client(const char *host, const char *host2, int port, int port2,
         exit(EXIT_FAILURE);
     }
 
-    server_socket = s_socket_tcp(port);
 
     if (opt == 'i' && opt2 == ' '){
 
@@ -193,9 +193,11 @@ void handle_tcp_client(const char *host, const char *host2, int port, int port2,
         int client_socket2, server_socket2;
         client_socket2 = socket(AF_INET, SOCK_STREAM, 0);
         struct sockaddr_in server_address2;
-        server_address2.sin_family = host2;
+        server_socket2 = s_socket_tcp(port2);
+
+        server_address2.sin_family = AF_INET;
         server_address2.sin_port = htons(port2);
-        if (inet_pton(AF_INET, host2, &server_address2.sin_addr) <= 0){
+        if (inet_pton(AF_INET, host2, &server_address2.sin_addr) < 0){
             perror("inet_pton");
             exit(EXIT_FAILURE);
         }
