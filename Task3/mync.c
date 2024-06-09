@@ -15,7 +15,8 @@ void print_usage(const char *prog_name)
 }
 
 int s_socket_tcp(int port){
-    int server_socket; 
+    
+    int server_socket = 0; 
     struct sockaddr_in server_address;
 
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -23,11 +24,7 @@ int s_socket_tcp(int port){
         perror("socket");
         exit(EXIT_FAILURE);
     }
-    int yes = 1;
-    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0)
-    {
-        perror("setsockopt() failed");
-    }
+    
 
     server_address.sin_family = AF_INET;
     server_address.sin_addr.s_addr = INADDR_ANY;
@@ -37,7 +34,13 @@ int s_socket_tcp(int port){
         perror("bind");
         exit(EXIT_FAILURE);
     }
-    
+
+    int optval = 1;
+    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1) {
+        perror("setsockopt");
+        exit(0);
+    }
+
     return server_socket;
 }
 
@@ -48,6 +51,8 @@ void handle_tcp_server(int port, int port2, char opt, char opt2, char** args) {
 
     struct sockaddr_in client_address;
     socklen_t client_address_length = sizeof(client_address);
+
+    
 
     if (listen(server_socket, 5) == -1) {
         perror("listen");
@@ -141,7 +146,6 @@ void parse_tcpc_string(const char *str, char *ip, int *port) {
     *port = atoi(comma_pos + 1);
 }
 
-
 void handle_tcp_client(const char *host, const char *host2, int port, int port2, char opt, char opt2, char** args)
 {
     int client_socket, server_socket;
@@ -154,9 +158,8 @@ void handle_tcp_client(const char *host, const char *host2, int port, int port2,
         exit(EXIT_FAILURE);
     }
 
-    server_socket = s_socket_tcp(port);
 
-    server_address.sin_family = AF_INET;
+    server_address.sin_family = AF_INET/6;
     server_address.sin_port = htons(port);
 
     if (inet_pton(AF_INET, host, &server_address.sin_addr) < 0)
@@ -170,16 +173,15 @@ void handle_tcp_client(const char *host, const char *host2, int port, int port2,
         perror("connect");
         exit(EXIT_FAILURE);
     }
-
-
+    
     if (opt == 'i' && opt2 == ' '){
-
-        dup2(server_socket, STDOUT_FILENO);
+        dup2(server_socket, STDIN_FILENO);
         execv(args[0], args);
     }
+     
 
     else if(opt == 'o' && opt2 == ' '){
-        dup2(server_socket, STDIN_FILENO);
+        dup2(server_socket, STDOUT_FILENO);
         execv(args[0], args);
     }
 
@@ -189,14 +191,20 @@ void handle_tcp_client(const char *host, const char *host2, int port, int port2,
         execv(args[0], args);
     }
 
+
+
+
     if(port2 != '0'){
         int client_socket2, server_socket2;
         client_socket2 = socket(AF_INET, SOCK_STREAM, 0);
         struct sockaddr_in server_address2;
         server_socket2 = s_socket_tcp(port2);
 
-        server_address2.sin_family = AF_INET;
+        server_address2.sin_family = AF_INET/6;
         server_address2.sin_port = htons(port2);
+
+        server_socket2 = s_socket_tcp(port2);
+
         if (inet_pton(AF_INET, host2, &server_address2.sin_addr) < 0){
             perror("inet_pton");
             exit(EXIT_FAILURE);
@@ -207,7 +215,6 @@ void handle_tcp_client(const char *host, const char *host2, int port, int port2,
              exit(EXIT_FAILURE);
         }
         
-        server_socket2 = s_socket_tcp(port2);
 
         if(opt == 'i' && opt2 == 'o'){
                  dup2(server_socket, STDIN_FILENO);
@@ -322,6 +329,7 @@ int main(int argc, char *argv[])
 
         else if(input != NULL && strncmp(input, "TCPC", 4) == 0){
             parse_tcpc_string(input, host, &port);
+            printf("No\n");
             handle_tcp_client(host, 0, port, 0, 'i', ' ',args);
         }
 
