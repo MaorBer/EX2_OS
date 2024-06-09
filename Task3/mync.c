@@ -156,7 +156,8 @@ void handle_tcp_client(const char *host, const char *host2, int port, int port2,
 
     server_address.sin_family = host;
     server_address.sin_port = htons(port);
-    
+
+
     if (inet_pton(AF_INET, host, &server_address.sin_addr) <= 0)
     {
         perror("inet_pton");
@@ -168,9 +169,11 @@ void handle_tcp_client(const char *host, const char *host2, int port, int port2,
         perror("connect");
         exit(EXIT_FAILURE);
     }
+
     server_socket = s_socket_tcp(port);
 
     if (opt == 'i' && opt2 == ' '){
+
         dup2(server_socket, STDOUT_FILENO);
         execv(args[0], args);
     }
@@ -317,17 +320,17 @@ int main(int argc, char *argv[])
 
         else if(input != NULL && strncmp(input, "TCPC", 4) == 0){
             parse_tcpc_string(input, host, &port);
-            handle_tcp_client(host, '0', port, 0, 'i', ' ',args);
+            handle_tcp_client(host, 0, port, 0, 'i', ' ',args);
         }
 
         else if(output != NULL && strncmp(output, "TCPC", 4) == 0){
             parse_tcpc_string(output, host, &port);
-            handle_tcp_client(host, '0', port, 0, 'o', ' ', args);
+            handle_tcp_client(host, 0, port, 0, 'o', ' ', args);
         }
 
         else if(both == 1 && strncmp(output, "TCPC", 4) == 0){
             parse_tcpc_string(output, host, &port);
-            handle_tcp_client(host, '0', port, 0, 'b', ' ',args);
+            handle_tcp_client(host, 0, port, 0, 'b', ' ',args);
         }
 
         else if(output != NULL && input != NULL && strncmp(input, "TCPC", 4) == 0 && strncmp(output, "TCPC", 4) == 0)
