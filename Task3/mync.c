@@ -230,8 +230,8 @@ void handle_udp_server(int port, int seconds, char** args){
     char buffer[BUFFER_SIZE];
     struct sockaddr_in server_addr, client_addr;
     socklen_t addr_len = sizeof(client_addr);
+    printf("%d\n", port);
 
-    printf("%d\n", seconds);
     // Create a UDP socket
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         perror("socket creation failed");
@@ -243,7 +243,7 @@ void handle_udp_server(int port, int seconds, char** args){
     memset(&client_addr, 0, sizeof(client_addr));
 
     // Fill server address structure
-    server_addr.sin_family = AF_INET/6;         // IPv4
+    server_addr.sin_family = AF_INET;         // IPv4
     server_addr.sin_addr.s_addr = INADDR_ANY; // Any IP address
     server_addr.sin_port = htons(port);       // Port number
 
@@ -255,19 +255,25 @@ void handle_udp_server(int port, int seconds, char** args){
     }
 
     printf("UDP server started on port %d\n", port);
+
+    // Set up alarm to trigger after 'duration' seconds
     signal(SIGALRM, handle_alarm);
     alarm(seconds);
-     while (!time_up)
-     {
+
+    while (!time_up) {
+        memset(buffer, 0, BUFFER_SIZE); // Clear the buffer before receiving a new message
         int n = recvfrom(sockfd, (char *)buffer, BUFFER_SIZE, MSG_WAITALL, (struct sockaddr *)&client_addr, &addr_len);
-        buffer[n] = '\0';
-        dup2(n, STDIN_FILENO);
-        execv(args[0], args);
-        const char *response = "Message received";
-        sendto(sockfd, response, strlen(response), MSG_CONFIRM, (const struct sockaddr *)&client_addr, addr_len);
-        sleep(1);
-     }
-     
+        if (n > 0) {
+            buffer[n] = '\0';
+            printf("Received message from client: %s\n", buffer);
+
+            // Optional: Send a response back to the client
+            const char *response = "Message received";
+            sendto(sockfd, response, strlen(response), MSG_CONFIRM, (const struct sockaddr *)&client_addr, addr_len);
+        }
+    }
+
+    printf("Server stopped after %d seconds\n", seconds);
     close(sockfd);
 }
 
