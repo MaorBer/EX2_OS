@@ -281,9 +281,8 @@ void handle_udp_server(int port, int seconds, char** args){
 void handle_udp_clinet(int port, char* host, char** args, int seconds){
     struct sockaddr_in server_addr;
     int client_socket;
-    int buffer[2] ={0};
-    int bytes_sent;
-    int times_to_send;
+    char buffer[BUFFER_SIZE];
+    int bytes_sent = 0;
 
     // Create UDP socket
     if ((client_socket = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
@@ -297,29 +296,21 @@ void handle_udp_clinet(int port, char* host, char** args, int seconds){
     server_addr.sin_port = htons(port);
     server_addr.sin_addr.s_addr = inet_addr(host); // Change this to the server's IP address
 
-    printf("enter: \n");   
-    scanf("%d", &buffer[0]);
-    printf("%d\n", buffer[0]);
-    buffer[1] = '\0';
-
-    
-    
-    for (int i = 0; i < 10; i++) {
-        // Send data to server
-        bytes_sent = sendto(client_socket, buffer, 2, 0, (struct sockaddr *)&server_addr, sizeof(server_addr));
+    for(int i = 0; i <3; i++){
+        dup2(client_socket,STDOUT_FILENO);
+        execv(args[0], args);
+        bytes_sent = sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_addr, sizeof(server_addr));
         if (bytes_sent == -1) {
             perror("Send failed");
             close(client_socket);
             exit(EXIT_FAILURE);
         }
-        buffer[0] = 1;
 
-        scanf("%d\n", &buffer[0]);
-        printf("%d\n", buffer[0]);
-        buffer[1] = '\0';
-        
+        printf("Message sent successfully: %s\n", buffer);
         sleep(1);
     }
+    
+    printf("3\n");
 
     // Close socket
     close(client_socket);
