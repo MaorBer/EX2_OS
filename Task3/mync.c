@@ -8,8 +8,11 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <signal.h>
 
 #define BUFFER_SIZE 1024
+
+volatile sig_atomic_t time_up = 0;
 
 void print_usage(const char *prog_name)
 {
@@ -217,12 +220,18 @@ void handle_tcp_client(const char *host, const char *host2, int port, int port2,
     close(client_socket);
 }
 
-void handle_udp_server(int port, int seconds){
+void handle_alarm(int signal) {
+    time_up = 1;
+}
+
+
+void handle_udp_server(int port, int seconds, char** args){
     int sockfd;
     char buffer[BUFFER_SIZE];
     struct sockaddr_in server_addr, client_addr;
     socklen_t addr_len = sizeof(client_addr);
 
+    printf("%d\n", seconds);
     // Create a UDP socket
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         perror("socket creation failed");
@@ -234,7 +243,7 @@ void handle_udp_server(int port, int seconds){
     memset(&client_addr, 0, sizeof(client_addr));
 
     // Fill server address structure
-    server_addr.sin_family = AF_INET;         // IPv4
+    server_addr.sin_family = AF_INET/6;         // IPv4
     server_addr.sin_addr.s_addr = INADDR_ANY; // Any IP address
     server_addr.sin_port = htons(port);       // Port number
 
@@ -246,15 +255,19 @@ void handle_udp_server(int port, int seconds){
     }
 
     printf("UDP server started on port %d\n", port);
-
-     for (int t = 0; t < seconds; t++) {
+    signal(SIGALRM, handle_alarm);
+    alarm(seconds);
+     while (!time_up)
+     {
         int n = recvfrom(sockfd, (char *)buffer, BUFFER_SIZE, MSG_WAITALL, (struct sockaddr *)&client_addr, &addr_len);
         buffer[n] = '\0';
-        dup2(sockfd, STDIN_FILENO);
-
+        dup2(n, STDIN_FILENO);
+        execv(args[0], args);
+        const char *response = "Message received";
+        sendto(sockfd, response, strlen(response), MSG_CONFIRM, (const struct sockaddr *)&client_addr, addr_len);
         sleep(1);
-    }
-
+     }
+     
     close(sockfd);
 }
 
@@ -273,7 +286,7 @@ int main(int argc, char *argv[])
     int port2 = 0;
     char *seconds = NULL;
     // Parse command-line arguments
-    while ((opt = getopt(argc, argv, "e:i:o:b:")) != -1)
+    while ((opt = getopt(argc, argv, "e:i:o:b:t:")) != -1)
     {
         switch (opt)
         {
@@ -292,7 +305,7 @@ int main(int argc, char *argv[])
             output = optarg;
             break;
         case 't':
-            seconds= optarg;
+            seconds = optarg;
 
         default:
             continue;
@@ -372,6 +385,12 @@ int main(int argc, char *argv[])
                 parse_tcpc_string(output, host2, &port2);
                 
                 handle_tcp_client(host, host2, port, port2, 'i', 'o', args);
+            }
+
+            else if(input != NULL && output == NULL && strncmp(input, "UDPS", 4) == 0)
+            {
+                port = atoi(input +4);
+                handle_udp_server(port, atoi(seconds), args);
             }
             
             else{
