@@ -9,6 +9,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#define BUFFER_SIZE 1024
+
 void print_usage(const char *prog_name)
 {
     fprintf(stderr, "Usage: %s -e <command> [-i <input>] [-o <output>] [-b <both>]\n", prog_name);
@@ -215,6 +217,48 @@ void handle_tcp_client(const char *host, const char *host2, int port, int port2,
     close(client_socket);
 }
 
+void handle_udp_server(int port, int seconds){
+    int sockfd;
+    char buffer[BUFFER_SIZE];
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t addr_len = sizeof(client_addr);
+
+    // Create a UDP socket
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Zero out the server address structure
+    memset(&server_addr, 0, sizeof(server_addr));
+    memset(&client_addr, 0, sizeof(client_addr));
+
+    // Fill server address structure
+    server_addr.sin_family = AF_INET;         // IPv4
+    server_addr.sin_addr.s_addr = INADDR_ANY; // Any IP address
+    server_addr.sin_port = htons(port);       // Port number
+
+    // Bind the socket with the server address
+    if (bind(sockfd, (const struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("bind failed");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("UDP server started on port %d\n", port);
+
+     for (int t = 0; t < seconds; t++) {
+        int n = recvfrom(sockfd, (char *)buffer, BUFFER_SIZE, MSG_WAITALL, (struct sockaddr *)&client_addr, &addr_len);
+        buffer[n] = '\0';
+        dup2(sockfd, STDIN_FILENO);
+
+        sleep(1);
+    }
+
+    close(sockfd);
+}
+
+
 int main(int argc, char *argv[])
 {
     int opt;
@@ -227,7 +271,7 @@ int main(int argc, char *argv[])
     int server_socket;
     int both = 0;
     int port2 = 0;
-
+    char *seconds = NULL;
     // Parse command-line arguments
     while ((opt = getopt(argc, argv, "e:i:o:b:")) != -1)
     {
@@ -247,9 +291,11 @@ int main(int argc, char *argv[])
             input = optarg;
             output = optarg;
             break;
+        case 't':
+            seconds= optarg;
+
         default:
-            print_usage(argv[0]);
-            return EXIT_FAILURE;
+            continue;
         }
     }
 
@@ -268,89 +314,85 @@ int main(int argc, char *argv[])
     {
         char *args[100]; // Assuming we won't have more than 100 arguments
         int arg_count = 0;
+        if (command != NULL){
+            char *token = strtok(command, " ");
+            while (token != NULL){
+                args[arg_count++] = token;
+                token = strtok(NULL, " ");
+            }
+            args[arg_count] = NULL;
+            // Child process
+            if(input == NULL && output == NULL)
+                execv(args[0], args);
 
-        char *token = strtok(command, " ");
-        while (token != NULL){
-            args[arg_count++] = token;
-            token = strtok(NULL, " ");
-        }
-        args[arg_count] = NULL;
-        // Child process
 
-        if(input == NULL && output == NULL)
-            execv(args[0], args);
+            else if(both == 1 && (input, "TCPS", 4) == 0)
+            {
+                port = atoi(input + 4);
+                handle_tcp_server(port, 0, 'b', ' ', args);
+            }
+    
+            else if (input != NULL && output == NULL && strncmp(input, "TCPS", 4) == 0) //TCPS AND I 
+            {
+                port = atoi(input + 4);
+                handle_tcp_server(port, 0, 'i', ' ', args);
+            }
 
+            else if(output != NULL  && input == NULL &&  strncmp(output, "TCPS", 4) == 0)
+            {
+                port = atoi(output + 4);
+                handle_tcp_server(port, 0, 'o', ' ', args);
+            }
 
-        else if(both == 1 && (input, "TCPS", 4) == 0)
-        {
-            port = atoi(input + 4);
-            handle_tcp_server(port, 0, 'b', ' ', args);
-        }
-  
-        else if (input != NULL && output == NULL && strncmp(input, "TCPS", 4) == 0) //TCPS AND I 
-        {
-            port = atoi(input + 4);
-            handle_tcp_server(port, 0, 'i', ' ', args);
-        }
+            else if(output != NULL && input != NULL && strncmp(input, "TCPS", 4) == 0 && strncmp(output, "TCPS", 4) == 0)
+            {
+                port = atoi(input + 4);
+                port2 = atoi(output + 4);
+                handle_tcp_server(port, port2, 'i', 'o', args);
+            }
 
-        else if(output != NULL  && input == NULL &&  strncmp(output, "TCPS", 4) == 0)
-        {
-            port = atoi(output + 4);
-            handle_tcp_server(port, 0, 'o', ' ', args);
-        }
+            else if(input != NULL && output == NULL && strncmp(input, "TCPC", 4) == 0){
+                parse_tcpc_string(input, host, &port);
+                handle_tcp_client(host, 0, port, 0, 'i', ' ',args);
+            }
 
-        else if(output != NULL && input != NULL && strncmp(input, "TCPS", 4) == 0 && strncmp(output, "TCPS", 4) == 0)
-        {
-            port = atoi(input + 4);
-            port2 = atoi(output + 4);
-            handle_tcp_server(port, port2, 'i', 'o', args);
-        }
+            else if(output != NULL && input == NULL && strncmp(output, "TCPC", 4) == 0){
+                parse_tcpc_string(output, host, &port);
+                handle_tcp_client(host, 0, port, 0, 'o', ' ', args);
+            }
 
-        else if(input != NULL && output == NULL && strncmp(input, "TCPC", 4) == 0){
-            parse_tcpc_string(input, host, &port);
-            handle_tcp_client(host, 0, port, 0, 'i', ' ',args);
-        }
+            else if(both == 1 && strncmp(output, "TCPC", 4) == 0){
+                parse_tcpc_string(output, host, &port);
+                handle_tcp_client(host, 0, port, 0, 'b', ' ',args);
+            }
 
-        else if(output != NULL && input == NULL && strncmp(output, "TCPC", 4) == 0){
-            parse_tcpc_string(output, host, &port);
-            handle_tcp_client(host, 0, port, 0, 'o', ' ', args);
-        }
-
-        else if(both == 1 && strncmp(output, "TCPC", 4) == 0){
-            parse_tcpc_string(output, host, &port);
-            handle_tcp_client(host, 0, port, 0, 'b', ' ',args);
-        }
-
-        else if(output != NULL && input != NULL && strncmp(input, "TCPC", 4) == 0 && strncmp(output, "TCPC", 4) == 0)
-        {
-            parse_tcpc_string(input, host, &port);
-            parse_tcpc_string(output, host2, &port2);
+            else if(output != NULL && input != NULL && strncmp(input, "TCPC", 4) == 0 && strncmp(output, "TCPC", 4) == 0)
+            {
+                parse_tcpc_string(input, host, &port);
+                parse_tcpc_string(output, host2, &port2);
+                
+                handle_tcp_client(host, host2, port, port2, 'i', 'o', args);
+            }
             
-            handle_tcp_client(host, host2, port, port2, 'i', 'o', args);
+            else{
+                print_usage(argv[0]);
+                return EXIT_FAILURE;
+            }
         }
-        
+
         else{
-            print_usage(argv[0]);
-            return EXIT_FAILURE;
+            char *args[100];
+            for(int i = 1; i < argc; ++i){
+                size_t length = strlen(argv[i])+1;
+                memcpy(args[i-1], argv[i], length);
+             }
+            
+            args[argc-1] = NULL;
+            execv(args[0], args);
         }
     }
     
-    else{
-        // Parent process
-        int status;
-        if (waitpid(pid, &status, 0) == -1){
-            perror("waitpid");
-            return EXIT_FAILURE;
-        }
-
-        if (WIFEXITED(status)){
-            printf("Child exited with status %d\n", WEXITSTATUS(status));
-        }
-        
-        else if (WIFSIGNALED(status)){
-            printf("Child killed by signal %d\n", WTERMSIG(status));
-        }
-    }
+    
 
     return EXIT_SUCCESS;
 }
