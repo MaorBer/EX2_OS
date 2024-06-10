@@ -312,8 +312,9 @@ void handle_udp_clinet(int port, char* host, char** args, int seconds){
             close(client_socket);
             exit(EXIT_FAILURE);
         }
+        buffer[0] = 1;
 
-        scanf("%d", &buffer[0]);
+        scanf("%d\n", &buffer[0]);
         printf("%d\n", buffer[0]);
         buffer[1] = '\0';
         
