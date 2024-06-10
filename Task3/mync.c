@@ -12,6 +12,7 @@
 
 #define BUFFER_SIZE 1024
 
+int udp_socket;
 volatile sig_atomic_t time_up = 0;
 
 void print_usage(const char *prog_name)
@@ -126,7 +127,7 @@ void handle_tcp_server(int port, int port2, char opt, char opt2, char** args) {
 
 }
 
-void parse_tcpc_string(const char *str, char *ip, int *port) {
+void parse_string(const char *str, char *ip, int *port) {
     // Find the position of the comma
     const char *comma_pos = strchr(str, ',');
     if (!comma_pos) {
@@ -219,64 +220,110 @@ void handle_tcp_client(const char *host, const char *host2, int port, int port2,
 
     close(client_socket);
 }
-
-void handle_alarm(int signal) {
-    time_up = 1;
+ 
+void signal_handler(int signum) {
+    printf("Alarm triggered. Closing server.\n");
+    close(udp_socket);
+    exit(0);
 }
-
 
 void handle_udp_server(int port, int seconds, char** args){
-    int sockfd;
-    char buffer[BUFFER_SIZE];
     struct sockaddr_in server_addr, client_addr;
-    socklen_t addr_len = sizeof(client_addr);
-    printf("%d\n", port);
+    socklen_t client_len = sizeof(client_addr);
+    char buffer[BUFFER_SIZE];
+    int bytes_received;
 
-    // Create a UDP socket
-    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        perror("socket creation failed");
+    // Create UDP socket
+    if ((udp_socket = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+        perror("Socket creation failed");
         exit(EXIT_FAILURE);
     }
 
-    // Zero out the server address structure
+    // Fill in server address details
     memset(&server_addr, 0, sizeof(server_addr));
-    memset(&client_addr, 0, sizeof(client_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    server_addr.sin_port = htons(port);
 
-    // Fill server address structure
-    server_addr.sin_family = AF_INET;         // IPv4
-    server_addr.sin_addr.s_addr = INADDR_ANY; // Any IP address
-    server_addr.sin_port = htons(port);       // Port number
-
-    // Bind the socket with the server address
-    if (bind(sockfd, (const struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        perror("bind failed");
-        close(sockfd);
+    // Bind socket to address
+    if (bind(udp_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
+        perror("Socket bind failed");
+        close(udp_socket);
         exit(EXIT_FAILURE);
     }
 
-    printf("UDP server started on port %d\n", port);
+    // Set the signal handler for SIGALRM
+    signal(SIGALRM, signal_handler);
 
-    // Set up alarm to trigger after 'duration' seconds
-    signal(SIGALRM, handle_alarm);
+    // Set the alarm
     alarm(seconds);
 
-    while (!time_up) {
-        memset(buffer, 0, BUFFER_SIZE); // Clear the buffer before receiving a new message
-        int n = recvfrom(sockfd, (char *)buffer, BUFFER_SIZE, MSG_WAITALL, (struct sockaddr *)&client_addr, &addr_len);
-        if (n > 0) {
-            buffer[n] = '\0';
-            printf("Received message from client: %s\n", buffer);
-
-            // Optional: Send a response back to the client
-            const char *response = "Message received";
-            sendto(sockfd, response, strlen(response), MSG_CONFIRM, (const struct sockaddr *)&client_addr, addr_len);
+    printf("UDP server is running...\n");
+    int count = 0;
+    while (1) {
+        // Receive data from client
+        bytes_received = recvfrom(udp_socket, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&client_addr, &client_len);
+        
+        if (bytes_received == -1) {
+            perror("Receive failed");
+            close(udp_socket);
+            exit(EXIT_FAILURE);
+        }
+        count++;
+        if(count> 4)
+        {
+            dup2(udp_socket, STDIN_FILENO);
+            execv(args[0], args);
         }
     }
-
-    printf("Server stopped after %d seconds\n", seconds);
-    close(sockfd);
 }
 
+void handle_udp_clinet(int port, char* host, char** args, int seconds){
+    struct sockaddr_in server_addr;
+    int client_socket;
+    int buffer[2] ={0};
+    int bytes_sent;
+    int times_to_send;
+
+    // Create UDP socket
+    if ((client_socket = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Fill in server address details
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+    server_addr.sin_addr.s_addr = inet_addr(host); // Change this to the server's IP address
+
+    printf("enter: \n");   
+    scanf("%d", &buffer[0]);
+    printf("%d\n", buffer[0]);
+    buffer[1] = '\0';
+
+    
+    
+    for (int i = 0; i < 10; i++) {
+        // Send data to server
+        bytes_sent = sendto(client_socket, buffer, 2, 0, (struct sockaddr *)&server_addr, sizeof(server_addr));
+        if (bytes_sent == -1) {
+            perror("Send failed");
+            close(client_socket);
+            exit(EXIT_FAILURE);
+        }
+
+        scanf("%d", &buffer[0]);
+        printf("%d\n", buffer[0]);
+        buffer[1] = '\0';
+        
+        sleep(1);
+    }
+
+    // Close socket
+    close(client_socket);
+
+}
 
 int main(int argc, char *argv[])
 {
@@ -371,24 +418,24 @@ int main(int argc, char *argv[])
             }
 
             else if(input != NULL && output == NULL && strncmp(input, "TCPC", 4) == 0){
-                parse_tcpc_string(input, host, &port);
+                parse_string(input, host, &port);
                 handle_tcp_client(host, 0, port, 0, 'i', ' ',args);
             }
 
             else if(output != NULL && input == NULL && strncmp(output, "TCPC", 4) == 0){
-                parse_tcpc_string(output, host, &port);
+                parse_string(output, host, &port);
                 handle_tcp_client(host, 0, port, 0, 'o', ' ', args);
             }
 
             else if(both == 1 && strncmp(output, "TCPC", 4) == 0){
-                parse_tcpc_string(output, host, &port);
+                parse_string(output, host, &port);
                 handle_tcp_client(host, 0, port, 0, 'b', ' ',args);
             }
 
             else if(output != NULL && input != NULL && strncmp(input, "TCPC", 4) == 0 && strncmp(output, "TCPC", 4) == 0)
             {
-                parse_tcpc_string(input, host, &port);
-                parse_tcpc_string(output, host2, &port2);
+                parse_string(input, host, &port);
+                parse_string(output, host2, &port2);
                 
                 handle_tcp_client(host, host2, port, port2, 'i', 'o', args);
             }
@@ -397,6 +444,11 @@ int main(int argc, char *argv[])
             {
                 port = atoi(input +4);
                 handle_udp_server(port, atoi(seconds), args);
+            }
+
+            else if(output != NULL && input == NULL && strncmp(output, "UDPC", 4) == 0){
+                parse_string(output, host, &port);
+                handle_udp_clinet(port, host, args, atoi(seconds));
             }
             
             else{
