@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
     }
     
     int round = 0;
-    while (round < 11) {
+    while (round < 4) {
         char move = next_move(strategy, board);
         if (move == '\0') {
             printf("Error\n");
