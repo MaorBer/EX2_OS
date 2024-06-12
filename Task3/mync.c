@@ -369,9 +369,12 @@ void uds_server_stream(char *socket_path, char **args)
     addr.sun_family = AF_UNIX;
     strcpy(addr.sun_path, socket_path);
 
+
+    unlink(addr.sun_path); // remove the socket file if it already exists
     if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
     {
         perror("error binding socket");
+        close(sockfd);
         exit(EXIT_FAILURE);
     }
 
@@ -379,8 +382,12 @@ void uds_server_stream(char *socket_path, char **args)
     if (listen(sockfd, 1) == -1)
     {
         perror("error listening on socket");
+        close(sockfd);
         exit(EXIT_FAILURE);
     }
+
+    printf("Server is listening...\n");
+
 
     // accept the connection and change the input_fd to the new socket
     struct sockaddr_un client_addr;
@@ -390,6 +397,7 @@ void uds_server_stream(char *socket_path, char **args)
     if (client_fd == -1)
     {
         perror("error accepting connection");
+        close(sockfd);
         exit(EXIT_FAILURE);
     }
 
@@ -509,6 +517,7 @@ int main(int argc, char *argv[])
             break;
         case 'i':
             input = optarg;
+
             break;
         case 'o':
             output = optarg;
@@ -648,10 +657,38 @@ int main(int argc, char *argv[])
                 uds_server_stream(output + 5, args);
             }
 
+            else if (input != NULL && output != NULL && strncmp(input, "UDSSS", 5) == 0 && strncmp(output, "TCPC", 4) == 0)
+            {
+                printf("UDSSS TCPC\n");
+                char host[256];
+                int port;
+
+                // Handle the "UDSSS" input
+                uds_server_stream(input + 5, args);
+
+                // Parse the "TCPC" output
+                parse_string(output, host, &port);
+
+                // Handle the "TCPC" output
+                handle_tcp_client(host, 0, port, 0, 'o', ' ', args);
+            }
+
             else if (input == NULL && output != NULL && strncmp(output, "UDSCS", 5) == 0)
             {
                 uds_client_stream(output + 5, args);
             }
+            // else if (strncmp(input, "UDS", 3) == 0) // If input starts with "UDS", set up a UDS client
+
+            // {   
+            //     printf("UDS");
+            //     char *socket_path = input + 3;
+            //     uds_client_stream(socket_path, args);
+            // }
+            // else if (strncmp(output, "UDS", 3) == 0) // If output starts with "UDS", set up a UDS server
+            // {
+            //     char *socket_path = output + 3;
+            //     uds_server_stream(socket_path, args);
+            // }
 
             else
             {
