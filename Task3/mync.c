@@ -16,8 +16,123 @@
 #define SOCKET_PATH "/tmp/unix_socket_example"
 #define BUFFER_SIZE 1024
 
+char *socket_path;
 int udp_socket;
 volatile sig_atomic_t time_up = 0;
+
+void uds_client_stream(char *socket_path, char **args)
+{
+    // create a socket
+    int sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sockfd == -1)
+    {
+        perror("error creating socket");
+        exit(EXIT_FAILURE);
+    }
+
+    // connect to the server
+    struct sockaddr_un addr;
+    addr.sun_family = AF_UNIX;
+    strcpy(addr.sun_path, socket_path);
+
+    if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
+    {
+        perror("error connecting to server");
+        exit(EXIT_FAILURE);
+    }
+
+    dup2(sockfd, STDOUT_FILENO);
+    execv(args[0], args);
+}
+
+void uds_server_datagram(char *socket_path, char **args)
+{
+    // create a socket
+    int sockfd = socket(AF_UNIX, SOCK_DGRAM, 0);
+    if (sockfd == -1)
+    {
+        perror("error creating socket");
+        exit(EXIT_FAILURE);
+    }
+
+    // bind the socket to the address
+    struct sockaddr_un addr;
+    addr.sun_family = AF_UNIX;
+    strcpy(addr.sun_path, socket_path);
+
+    if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
+    {
+        printf("%s\n", addr.sun_path);
+        perror("error binding socket");
+        exit(EXIT_FAILURE);
+    }
+
+    // receive dummy data to get the client address
+    char buffer[1024];
+    struct sockaddr_un client_addr;
+    socklen_t client_addr_len = sizeof(client_addr);
+
+    int bytes_received = recvfrom(sockfd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &client_addr_len);
+    if (bytes_received == -1)
+    {
+        perror("error receiving data");
+        exit(EXIT_FAILURE);
+    }
+
+    dup2(sockfd, STDIN_FILENO);
+    execv(args[0], args);
+}
+
+void uds_server_stream(char *socket_path, char **args)
+{
+    // create a socket
+    int sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sockfd == -1)
+    {
+        perror("error creating socket");
+        exit(EXIT_FAILURE);
+    }
+
+    // bind the socket to the address
+    struct sockaddr_un addr;
+    addr.sun_family = AF_UNIX;
+    strcpy(addr.sun_path, socket_path);
+
+
+    unlink(addr.sun_path); // remove the socket file if it already exists
+    if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
+    {
+        perror("error binding socket");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    // listen for incoming connections - at most 1
+    if (listen(sockfd, 1) == -1)
+    {
+        perror("error listening on socket");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Server is listening...\n");
+
+
+    // accept the connection and change the input_fd to the new socket
+    struct sockaddr_un client_addr;
+    socklen_t client_addr_len = sizeof(client_addr);
+    int client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &client_addr_len);
+
+    if (client_fd == -1)
+    {
+        perror("error accepting connection");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    dup2(client_fd, STDIN_FILENO);
+    execv(args[0], args);
+}
 
 void print_usage(const char *prog_name)
 {
@@ -113,11 +228,18 @@ void handle_tcp_server(int port, int port2, char opt, char opt2, char **args)
 
     else if (opt == 'b' && opt2 == ' ')
     {
-        dup2(client_socket, STDIN_FILENO);
         dup2(client_socket, STDOUT_FILENO);
+
+        dup2(client_socket, STDIN_FILENO);
         execv(args[0], args);
     }
 
+    else if (opt == 'i' && opt2 == 'u')
+    {
+        dup2(client_socket, STDIN_FILENO);
+        uds_client_stream(socket_path, args);
+    }
+    
     else if (opt == 'i' && opt2 == 'o')
     {
         dup2(client_socket, STDIN_FILENO);
@@ -166,6 +288,65 @@ void parse_string(const char *str, char *ip, int *port)
     *port = atoi(comma_pos + 1);
 }
 
+void handle_udp_clinet(int port, char *host, char **args, int seconds, char opt)
+{
+    int client_socket;
+    struct sockaddr_in server_addr;
+    char buffer[BUFFER_SIZE];
+    int bytes_sent;
+    socklen_t addr_len = sizeof(server_addr);
+
+    // Create UDP socket
+    client_socket = socket(AF_INET, SOCK_DGRAM, 0);
+    if (client_socket == -1)
+    {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Fill in server address details
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+
+    if (connect(client_socket, (struct sockaddr *)&server_addr, addr_len) == -1)
+    {
+        perror("connect");
+        exit(1);
+    }
+    if (seconds != 0)
+    {
+       signal(SIGALRM, signal_handler);
+
+        // Set the alarm
+         alarm(seconds);
+    }
+    
+    if(opt == 'u'){
+        dup2(client_socket, STDOUT_FILENO);
+        uds_server_datagram(socket_path, args);
+    }
+    else{
+        dup2(client_socket, STDOUT_FILENO);
+        execv(args[0],args);
+    }
+
+
+    while (1)
+    {
+        bytes_sent = sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_addr, sizeof(server_addr));
+        if (bytes_sent == -1)
+        {
+            perror("Send failed");
+            close(client_socket);
+            exit(EXIT_FAILURE);
+        }
+    }
+    // Close socket
+    close(client_socket);
+}
+
+
 void handle_tcp_client(const char *host, const char *host2, int port, int port2, char opt, char opt2, char **args)
 {
 
@@ -202,6 +383,23 @@ void handle_tcp_client(const char *host, const char *host2, int port, int port2,
         dup2(client_socket, STDIN_FILENO);
         execv(args[0], args);
     }
+
+    else if(opt = 'o' && opt2 == 's'){
+        dup2(client_socket, STDOUT_FILENO);
+        uds_server_stream(socket_path, args);
+
+    }
+
+    else if(opt = 'i' && opt2 == 'c'){
+        dup2(client_socket, STDIN_FILENO);
+        uds_client_stream(socket_path, args);
+    }
+
+    else if(opt = 'i' && opt2 == 'd'){
+        dup2(client_socket, STDIN_FILENO);
+        handle_udp_clinet(port2, host2, args, 0, ' ');
+    }
+
 
     if (port2 != '0')
     {
@@ -246,7 +444,7 @@ void signal_handler(int signum)
     exit(0);
 }
 
-void handle_udp_server(int port, int seconds, char **args)
+void handle_udp_server(int port, int seconds, char **args, char opt)
 {
     struct sockaddr_in server_addr, client_addr;
     socklen_t client_len = sizeof(client_addr);
@@ -298,175 +496,18 @@ void handle_udp_server(int port, int seconds, char **args)
         }
         count++;
         if (count > 4)
-        {
+        {   
             dup2(udp_socket, STDIN_FILENO);
-            execv(args[0], args);
+
+            if(opt == 'u')
+                uds_client_datagram(socket_path, args);
+            
+            else    
+                execv(args[0], args);
         }
     }
 }
 
-void handle_udp_clinet(int port, char *host, char **args, int seconds)
-{
-    int client_socket;
-    struct sockaddr_in server_addr;
-    char buffer[BUFFER_SIZE];
-    int bytes_sent;
-    socklen_t addr_len = sizeof(server_addr);
-
-    // Create UDP socket
-    client_socket = socket(AF_INET, SOCK_DGRAM, 0);
-    if (client_socket == -1)
-    {
-        perror("Socket creation failed");
-        exit(EXIT_FAILURE);
-    }
-
-    // Fill in server address details
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-
-    if (connect(client_socket, (struct sockaddr *)&server_addr, addr_len) == -1)
-    {
-        perror("connect");
-        exit(1);
-    }
-
-    signal(SIGALRM, signal_handler);
-
-    // Set the alarm
-    alarm(seconds);
-
-    dup2(client_socket, STDOUT_FILENO);
-    execv(args[0], args);
-
-    while (1)
-    {
-        bytes_sent = sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr *)&server_addr, sizeof(server_addr));
-        if (bytes_sent == -1)
-        {
-            perror("Send failed");
-            close(client_socket);
-            exit(EXIT_FAILURE);
-        }
-    }
-    // Close socket
-    close(client_socket);
-}
-
-void uds_server_stream(char *socket_path, char **args)
-{
-    // create a socket
-    int sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (sockfd == -1)
-    {
-        perror("error creating socket");
-        exit(EXIT_FAILURE);
-    }
-
-    // bind the socket to the address
-    struct sockaddr_un addr;
-    addr.sun_family = AF_UNIX;
-    strcpy(addr.sun_path, socket_path);
-
-
-    unlink(addr.sun_path); // remove the socket file if it already exists
-    if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
-    {
-        perror("error binding socket");
-        close(sockfd);
-        exit(EXIT_FAILURE);
-    }
-
-    // listen for incoming connections - at most 1
-    if (listen(sockfd, 1) == -1)
-    {
-        perror("error listening on socket");
-        close(sockfd);
-        exit(EXIT_FAILURE);
-    }
-
-    printf("Server is listening...\n");
-
-
-    // accept the connection and change the input_fd to the new socket
-    struct sockaddr_un client_addr;
-    socklen_t client_addr_len = sizeof(client_addr);
-    int client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &client_addr_len);
-
-    if (client_fd == -1)
-    {
-        perror("error accepting connection");
-        close(sockfd);
-        exit(EXIT_FAILURE);
-    }
-
-    dup2(client_fd, STDOUT_FILENO);
-    execv(args[0], args);
-}
-
-void uds_server_datagram(char *socket_path, char **args)
-{
-    // create a socket
-    int sockfd = socket(AF_UNIX, SOCK_DGRAM, 0);
-    if (sockfd == -1)
-    {
-        perror("error creating socket");
-        exit(EXIT_FAILURE);
-    }
-
-    // bind the socket to the address
-    struct sockaddr_un addr;
-    addr.sun_family = AF_UNIX;
-    strcpy(addr.sun_path, socket_path);
-
-    if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
-    {
-        printf("%s\n", addr.sun_path);
-        perror("error binding socket");
-        exit(EXIT_FAILURE);
-    }
-
-    // receive dummy data to get the client address
-    char buffer[1024];
-    struct sockaddr_un client_addr;
-    socklen_t client_addr_len = sizeof(client_addr);
-
-    int bytes_received = recvfrom(sockfd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &client_addr_len);
-    if (bytes_received == -1)
-    {
-        perror("error receiving data");
-        exit(EXIT_FAILURE);
-    }
-
-    dup2(sockfd, STDIN_FILENO);
-    execv(args[0], args);
-}
-
-void uds_client_stream(char *socket_path, char **args)
-{
-    // create a socket
-    int sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (sockfd == -1)
-    {
-        perror("error creating socket");
-        exit(EXIT_FAILURE);
-    }
-
-    // connect to the server
-    struct sockaddr_un addr;
-    addr.sun_family = AF_UNIX;
-    strcpy(addr.sun_path, socket_path);
-
-    if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
-    {
-        perror("error connecting to server");
-        exit(EXIT_FAILURE);
-    }
-
-    dup2(sockfd, STDOUT_FILENO);
-    execv(args[0], args);
-}
 
 void uds_client_datagram(char *socket_path, char **args)
 {
@@ -558,21 +599,15 @@ int main(int argc, char *argv[])
             }
 
             args[arg_count] = NULL;
-            printf("%s %s\n", input, output);
             // Child process
-            if (input == NULL && output == NULL)
+            if (input == NULL && output == NULL){
                 execv(args[0], args);
+            }
 
-            else if (both == 1 && (input, "TCPS", 4) == 0)
+            else if (both == 1 && strncmp(input, "TCPS", 4) == 0)
             {
                 port = atoi(input + 4);
                 handle_tcp_server(port, 0, 'b', ' ', args);
-            }
-
-            else if (input != NULL && output == NULL && strncmp(input, "TCPS", 4) == 0) // TCPS AND I
-            {
-                port = atoi(input + 4);
-                handle_tcp_server(port, 0, 'i', ' ', args);
             }
 
             else if (output != NULL && input == NULL && strncmp(output, "TCPS", 4) == 0)
@@ -581,11 +616,16 @@ int main(int argc, char *argv[])
                 handle_tcp_server(port, 0, 'o', ' ', args);
             }
 
-            else if (output != NULL && input != NULL && strncmp(input, "TCPS", 4) == 0 && strncmp(output, "TCPS", 4) == 0)
+            else if (input != NULL && output == NULL && strncmp(input, "TCPS", 4) == 0) // TCPS AND I
             {
                 port = atoi(input + 4);
-                port2 = atoi(output + 4);
-                handle_tcp_server(port, port2, 'i', 'o', args);
+                handle_tcp_server(port, 0, 'i', ' ', args);
+            }
+
+            else if (both == 1 && strncmp(output, "TCPC", 4) == 0)  
+            {
+                parse_string(output, host, &port);
+                handle_tcp_client(host, 0, port, 0, 'b', ' ', args);
             }
 
             else if (input != NULL && output == NULL && strncmp(input, "TCPC", 4) == 0)
@@ -600,10 +640,54 @@ int main(int argc, char *argv[])
                 handle_tcp_client(host, 0, port, 0, 'o', ' ', args);
             }
 
-            else if (both == 1 && strncmp(output, "TCPC", 4) == 0)
+            else if (input != NULL && output == NULL && strncmp(input, "UDPS", 4) == 0)
+            {
+                port = atoi(input + 4);
+                handle_udp_server(port, atoi(seconds), args, ' ');
+            }
+
+            else if (input != NULL && output != NULL && strncmp(input, "UDPS", 5) == 0 && strncmp(output, "USSCD", 4) == 0)
+            {
+                socket_path = output + 5;
+                parse_string(input, host, &port);
+                
+                handle_udp_server(port, 0, args, 'u'); 
+            }
+
+            else if (output != NULL && input == NULL && strncmp(output, "UDPC", 4) == 0)
             {
                 parse_string(output, host, &port);
-                handle_tcp_client(host, 0, port, 0, 'b', ' ', args);
+                handle_udp_clinet(port, host, args, atoi(seconds), ' ');
+            }
+
+            else if (output != NULL && input != NULL && strncmp(output, "UDPC", 4) == 0 && strncmp(input, "TCPC", 4) == 0)
+            {
+                parse_string(input, host, &port);
+                parse_string(output, host2, &port2);
+                handle_tcp_client(port,port2,host, host2, 'i', 'd', args);
+            }
+            
+            else if (input != NULL && output != NULL && strncmp(input, "TCPS", 4) == 0 && strncmp(output, "UDPC", 4) == 0)
+            {
+                port = atoi(input + 4);
+                handle_tcp_server(port, 0, 'i', ' ', args);
+                parse_string(output, host, &port);
+                handle_udp_clinet(port, host, args, 0,  ' ');
+            }
+
+            else if (output != NULL && input != NULL && strncmp(input, "TCPS", 4) == 0 && strncmp(output, "TCPS", 4) == 0)
+            {
+                port = atoi(input + 4);
+                port2 = atoi(output + 4);
+                handle_tcp_server(port, port2, 'i', 'o', args);
+            }
+
+            else if (input != NULL && output != NULL && strncmp(input, "TCPS", 5) == 0 && strncmp(output, "USSCS", 4) == 0)
+            {
+                socket_path = output + 5;
+                parse_string(input, host, &port);
+                
+                handle_tcp_server(port, 0, 'i', 'u', args); 
             }
 
             else if (output != NULL && input != NULL && strncmp(input, "TCPC", 4) == 0 && strncmp(output, "TCPC", 4) == 0)
@@ -614,16 +698,12 @@ int main(int argc, char *argv[])
                 handle_tcp_client(host, host2, port, port2, 'i', 'o', args);
             }
 
-            else if (input != NULL && output == NULL && strncmp(input, "UDPS", 4) == 0)
+            else if (input != NULL && output != NULL && strncmp(input, "TCPC", 5) == 0 && strncmp(output, "USSCS", 4) == 0)
             {
-                port = atoi(input + 4);
-                handle_udp_server(port, atoi(seconds), args);
-            }
-
-            else if (output != NULL && input == NULL && strncmp(output, "UDPC", 4) == 0)
-            {
-                parse_string(output, host, &port);
-                handle_udp_clinet(port, host, args, atoi(seconds));
+                socket_path = output + 5;
+                parse_string(input, host, &port);
+                
+                handle_tcp_client(host, 0, port, 0, 'i', 'c', args); 
             }
 
             else if (input != NULL && output != NULL && strncmp(input, "UDPS", 4) == 0 && strncmp(output, "TCPC", 4) == 0)
@@ -634,17 +714,17 @@ int main(int argc, char *argv[])
                 handle_tcp_client(host, 0, port, 0, 'o', ' ', args);
             }
 
-            else if (input != NULL && output != NULL && strncmp(input, "TCPS", 4) == 0 && strncmp(output, "UDPC", 4) == 0)
-            {
-                port = atoi(input + 4);
-                handle_tcp_server(port, 0, 'i', ' ', args);
-                parse_string(output, host, &port);
-                handle_udp_clinet(port, host, args, 0);
-            }
-
             else if (input != NULL && output == NULL && strncmp(input, "UDSSD", 5) == 0)
             {
                 uds_server_datagram(input + 5, args);
+            }
+
+            else if (input != NULL && output != NULL && strncmp(input, "UDSSD", 5) == 0 && strncmp(output, "UDPC", 4) == 0)
+            {
+                socket_path = input + 5;
+                parse_string(output, host, &port);
+                
+                handle_udp_clinet(port, host, args, 0,'u'); 
             }
 
             else if (input != NULL && output == NULL && strncmp(input, "UDSCD", 5) == 0)
@@ -659,36 +739,12 @@ int main(int argc, char *argv[])
 
             else if (input != NULL && output != NULL && strncmp(input, "UDSSS", 5) == 0 && strncmp(output, "TCPC", 4) == 0)
             {
-                printf("UDSSS TCPC\n");
-                char host[256];
-                int port;
-
-                // Handle the "UDSSS" input
-                uds_server_stream(input + 5, args);
-
-                // Parse the "TCPC" output
+                socket_path = input + 5;
                 parse_string(output, host, &port);
+                
+                handle_tcp_client(host, 0, port, 0, 'o', 's', args);
 
-                // Handle the "TCPC" output
-                handle_tcp_client(host, 0, port, 0, 'o', ' ', args);
             }
-
-            else if (input == NULL && output != NULL && strncmp(output, "UDSCS", 5) == 0)
-            {
-                uds_client_stream(output + 5, args);
-            }
-            // else if (strncmp(input, "UDS", 3) == 0) // If input starts with "UDS", set up a UDS client
-
-            // {   
-            //     printf("UDS");
-            //     char *socket_path = input + 3;
-            //     uds_client_stream(socket_path, args);
-            // }
-            // else if (strncmp(output, "UDS", 3) == 0) // If output starts with "UDS", set up a UDS server
-            // {
-            //     char *socket_path = output + 3;
-            //     uds_server_stream(socket_path, args);
-            // }
 
             else
             {
