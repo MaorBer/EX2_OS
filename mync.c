@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/un.h>
+#include "mync.h"
 
 #define SOCKET_PATH "/tmp/unix_socket_example"
 #define BUFFER_SIZE 1024
