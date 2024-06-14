@@ -20,7 +20,31 @@ char *socket_path;
 int udp_socket;
 volatile sig_atomic_t time_up = 0;
 
+void uds_client_datagram(char *socket_path, char **args)
+{
+    // create a socket
+    int sockfd = socket(AF_UNIX, SOCK_DGRAM, 0);
+    if (sockfd == -1)
+    {
+        perror("error creating socket");
+        exit(EXIT_FAILURE);
+    }
 
+    // connect to the server
+    struct sockaddr_un addr;
+    addr.sun_family = AF_UNIX;
+    strcpy(addr.sun_path, socket_path);
+
+    // connect the socket to the server
+    if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
+    {
+        perror("error connecting socket");
+        exit(EXIT_FAILURE);
+    }
+
+    dup2(sockfd, STDIN_FILENO);
+    execv(args[0], args);
+}
 
 
 void uds_client_stream(char *socket_path, char **args)
@@ -357,7 +381,7 @@ void handle_udp_clinet(int port, char *host, char **args, int seconds, char opt)
 }
 
 
-void handle_tcp_client(const char *host, const char *host2, int port, int port2, char opt, char opt2, char **args)
+void handle_tcp_client(char *host, char *host2, int port, int port2, char opt, char opt2, char **args)
 {
 
     int client_socket;
@@ -513,33 +537,6 @@ void handle_udp_server(int port, int seconds, char **args, char opt)
     }
 }
 
-
-void uds_client_datagram(char *socket_path, char **args)
-{
-    // create a socket
-    int sockfd = socket(AF_UNIX, SOCK_DGRAM, 0);
-    if (sockfd == -1)
-    {
-        perror("error creating socket");
-        exit(EXIT_FAILURE);
-    }
-
-    // connect to the server
-    struct sockaddr_un addr;
-    addr.sun_family = AF_UNIX;
-    strcpy(addr.sun_path, socket_path);
-
-    // connect the socket to the server
-    if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
-    {
-        perror("error connecting socket");
-        exit(EXIT_FAILURE);
-    }
-
-    dup2(sockfd, STDIN_FILENO);
-    execv(args[0], args);
-}
-
 int main(int argc, char *argv[])
 {
     int opt;
@@ -669,7 +666,7 @@ int main(int argc, char *argv[])
             {
                 parse_string(input, host, &port);
                 parse_string(output, host2, &port2);
-                handle_tcp_client(port,port2,host, host2, 'i', 'd', args);
+                handle_tcp_client(host, host2, port,port2, 'i', 'd', args);
             }
             
             else if (input != NULL && output != NULL && strncmp(input, "TCPS", 4) == 0 && strncmp(output, "UDPC", 4) == 0)
