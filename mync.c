@@ -368,7 +368,7 @@ void handle_udp_clinet(int port, int port2, char *host, char **args, int seconds
         uds_server_datagram(socket_path, args);
     
     else if(opt == 's')
-        handle_udp_server(port2,seconds, args, ' ');
+        handle_udp_server(port2, 0, seconds, args, ' ');
     
     else
         execv(args[0],args);
@@ -689,7 +689,7 @@ int main(int argc, char *argv[])
             else if (input != NULL && output == NULL && strncmp(input, "UDPS", 4) == 0)
             {
                 port = atoi(input + 4);
-                handle_udp_server(port, atoi(seconds), args, ' ');
+                handle_udp_server(port, 0, atoi(seconds), args, ' ');
             }
 
             //input UDSSD
