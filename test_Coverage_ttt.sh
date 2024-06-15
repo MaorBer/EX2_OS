@@ -27,7 +27,7 @@ diff -s output2.txt expected_output2.txt
 
 # Test case 3: Testing edge case 1
 echo "Test case 3: Edge case 1"
-./ttt 123123123 > output3.txt << EOF
+./ttt 12312312/111 > output3.txt << EOF
 3
 6
 9
@@ -36,7 +36,7 @@ diff -s output3.txt expected_output3.txt
 
 # Test case 4: Testing edge case 2
 echo "Test case 4: Edge case 2"
-./ttt 321321321 > output4.txt << EOF
+./ttt 321321@# > output4.txt << EOF
 1
 2
 3
