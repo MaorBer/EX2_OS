@@ -20,6 +20,13 @@ char *socket_path;
 int udp_socket;
 volatile sig_atomic_t time_up = 0;
 
+void signal_handler(int signum)
+{
+    printf("Alarm triggered. Closing server.\n");
+    close(udp_socket);
+    exit(0);
+}
+
 void uds_client_datagram(char *socket_path, char **args)
 {
     // create a socket
@@ -285,12 +292,76 @@ void handle_tcp_server(int port, int port2, char opt, char opt2, char **args)
     close(server_socket2);
     close(client_socket2);
 }
-//due to declaration of signal_handler function before main
-void signal_handler(int signum)
+
+void handle_udp_server(int port, int port2, int seconds, char **args, char opt)
 {
-    printf("Alarm triggered. Closing server.\n");
-    close(udp_socket);
-    exit(0);
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t client_len = sizeof(client_addr);
+    char buffer[BUFFER_SIZE];
+    int bytes_received;
+
+    // Create UDP socket
+    if ((udp_socket = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+    {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Fill in server address details
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    server_addr.sin_port = htons(port);
+
+    // Bind socket to address
+    if (bind(udp_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+    {
+        perror("Socket bind failed");
+        close(udp_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    // Set the signal handler for SIGALRM
+    if (seconds != 0)
+    {
+        signal(SIGALRM, signal_handler);
+
+        // Set the alarm
+        alarm(seconds);
+    }
+
+    printf("UDP server is running...\n");
+    int count = 0;
+    while (1)
+    {
+        // Receive data from client
+        bytes_received = recvfrom(udp_socket, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&client_addr, &client_len);
+
+        if (bytes_received == -1)
+        {
+            perror("Receive failed");
+            close(udp_socket);
+        exit(EXIT_FAILURE);
+
+        }
+        count++;
+        if (count > 4)
+        {   
+            dup2(udp_socket, STDIN_FILENO);
+
+            if(opt == 'u')
+                uds_client_datagram(socket_path, args);
+            if(opt == 't')
+                handle_tcp_server(port, 0,  'o', ' ', args);
+            if(opt == 'z')
+                uds_client_stream(socket_path, args);
+            if(opt == 's')
+                uds_server_stream(socket_path, args);
+            
+            else    
+                execv(args[0], args);
+        }
+    }
 }
 
 void parse_string(const char *str, char *ip, int *port)
@@ -361,8 +432,8 @@ void handle_udp_clinet(int port, int port2, char *host, char **args, int seconds
         // Set the alarm
          alarm(seconds);
     }
+    
     dup2(client_socket, STDOUT_FILENO);
-
 
     if(opt == 'u')
         uds_server_datagram(socket_path, args);
@@ -388,6 +459,8 @@ void handle_udp_clinet(int port, int port2, char *host, char **args, int seconds
     // Close socket
     close(client_socket);
 }
+
+
 
 void handle_tcp_client(char *host, char *host2, int port, int port2, char opt, char opt2, char **args)
 {
@@ -496,76 +569,6 @@ void handle_tcp_client(char *host, char *host2, int port, int port2, char opt, c
     close(client_socket);
 }
 
-void handle_udp_server(int port, int port2, int seconds, char **args, char opt)
-{
-    struct sockaddr_in server_addr, client_addr;
-    socklen_t client_len = sizeof(client_addr);
-    char buffer[BUFFER_SIZE];
-    int bytes_received;
-
-    // Create UDP socket
-    if ((udp_socket = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-    {
-        perror("Socket creation failed");
-        exit(EXIT_FAILURE);
-    }
-
-    // Fill in server address details
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    server_addr.sin_port = htons(port);
-
-    // Bind socket to address
-    if (bind(udp_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
-    {
-        perror("Socket bind failed");
-        close(udp_socket);
-        exit(EXIT_FAILURE);
-    }
-
-    // Set the signal handler for SIGALRM
-    if (seconds != 0)
-    {
-        signal(SIGALRM, signal_handler);
-
-        // Set the alarm
-        alarm(seconds);
-    }
-
-    printf("UDP server is running...\n");
-    int count = 0;
-    while (1)
-    {
-        // Receive data from client
-        bytes_received = recvfrom(udp_socket, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&client_addr, &client_len);
-
-        if (bytes_received == -1)
-        {
-            perror("Receive failed");
-            close(udp_socket);
-        exit(EXIT_FAILURE);
-
-        }
-        count++;
-        if (count > 4)
-        {   
-            dup2(udp_socket, STDIN_FILENO);
-
-            if(opt == 'u')
-                uds_client_datagram(socket_path, args);
-            if(opt == 't')
-                handle_tcp_server(port, 0,  'o', ' ', args);
-            if(opt == 'z')
-                uds_client_stream(socket_path, args);
-            if(opt == 's')
-                uds_server_stream(socket_path, args);
-            
-            else    
-                execv(args[0], args);
-        }
-    }
-}
 
 int main(int argc, char *argv[])
 {
@@ -724,7 +727,7 @@ int main(int argc, char *argv[])
             else if (output != NULL && input != NULL && strncmp(input, "TCPC", 4) == 0 && strncmp(output, "TCPS", 4) == 0 )
             {
                 parse_string(input, host, &port);
-                port2 = output + 4;
+                port2 = atoi(output + 4);
                 handle_tcp_client(host, 0, port, port2, 'i', 's', args);
             }
 
@@ -758,14 +761,14 @@ int main(int argc, char *argv[])
             //input with TCPS  output with TCPS
             else if (output != NULL && input != NULL && strncmp(output, "TCPS", 4) == 0 && strncmp(input, "TCPS", 4) == 0)
             {
-                handle_tcp_server(input + 4, output +4, 'i', 'o', args);
+                handle_tcp_server(atoi(input + 4), atoi(output +4), 'i', 'o', args);
             }
 
             //input with TCPS output with TCPC
             else if (output != NULL && input != NULL && strncmp(output, "TCPC", 4) == 0 && strncmp(input, "TCPS", 4) == 0)
             {
                 parse_string(output, host, &port);
-                port2 = input + 4;
+                port2 = atoi(input + 4);
                 handle_tcp_client(host, 0, port, port2, 'o', 's', args);
             }
 
@@ -781,7 +784,7 @@ int main(int argc, char *argv[])
             
             //input with UDPS output with UDPS
             else if (input != NULL && output != NULL && strncmp(input, "UDPS", 4) == 0 && strncmp(output, "UDPC", 4) == 0){
-                parse_string(output, host, port);
+                parse_string(output, host, &port);
                 handle_udp_clinet(port, port2, host, args, atoi(seconds), 's');
             }
 
@@ -812,7 +815,7 @@ int main(int argc, char *argv[])
             //input with UDPS output wuth TCPS
             else if(input != NULL && output != NULL && strncmp(input, "UDPS", 4) == 0 && strncmp(output, "TCPS", 4) == 0)
             {
-                handle_udp_server(input + 4, output +4, atoi(seconds), args, 't');
+                handle_udp_server(atoi(input + 4), atoi(output +4), atoi(seconds), args, 't');
 
             }
 
