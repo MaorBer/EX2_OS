@@ -12,9 +12,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/un.h>
-#include "mync.h"
 
+#define SOCKET_PATH "/tmp/unix_socket_example"
+#define BUFFER_SIZE 1024
 
+char *socket_path;
+int udp_socket;
+volatile sig_atomic_t time_up = 0;
 
 void uds_client_datagram(char *socket_path, char **args)
 {
