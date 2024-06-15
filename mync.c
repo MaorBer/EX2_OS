@@ -460,8 +460,6 @@ void handle_udp_clinet(int port, int port2, char *host, char **args, int seconds
     close(client_socket);
 }
 
-
-
 void handle_tcp_client(char *host, char *host2, int port, int port2, char opt, char opt2, char **args)
 {
 
@@ -499,40 +497,36 @@ void handle_tcp_client(char *host, char *host2, int port, int port2, char opt, c
         execv(args[0], args);
     }
 
-    else if(opt = 'o' && opt2 == 's'){
+    else if(opt == 'o' && opt2 == 's'){
         dup2(client_socket, STDOUT_FILENO);
         uds_server_stream(socket_path, args);
     }
 
-    else if(opt = 'o' && opt2 == 't'){
+    else if(opt == 'o' && opt2 == 't'){
         dup2(client_socket, STDOUT_FILENO);
         handle_tcp_server(port2,port,'i', ' ', args);
     }
 
-    else if(opt = 'i' && opt2 == 'c'){
+    else if(opt == 'i' && opt2 == 'c'){
         dup2(client_socket, STDIN_FILENO);
         uds_client_stream(socket_path, args);
     }
 
-    else if(opt = 'i' && opt2 == 'd'){
+    else if(opt == 'i' && opt2 == 'd'){
         dup2(client_socket, STDIN_FILENO);
         handle_udp_clinet(port2, 0, host2, args, 0, ' ');
     }
 
-    else if(opt = 'o' && opt2 == 'u'){
+    else if(opt =='o' && opt2 == 'u'){
         dup2(client_socket, STDOUT_FILENO);
         handle_udp_server(port2, 0, 0, args, ' ');
     }
-
-
-
 
     if (port2 != '0')
     {
         int client_socket2;
         client_socket2 = socket(AF_INET, SOCK_STREAM, 0);
         struct sockaddr_in server2;
-        socklen_t socklen2 = sizeof(server2);
         client_socket2 = socket(AF_INET, SOCK_STREAM, 0);
 
         server2.sin_family = AF_INET;
@@ -579,7 +573,6 @@ int main(int argc, char *argv[])
     int port = 0;
     char host[120] = {0};
     char host2[120] = {0};
-    int server_socket;
     int both = 0;
     int port2 = 0;
     char *seconds = NULL;
