@@ -2,19 +2,19 @@
 
 CC = gcc
 CFLAGS = -Wall -g
-COV = -fprofile-arcs -ftest-coverage
+
 
 all: mync ttt
 
 
 mync: mync.c
-	$(CC) $(CFLAGS) $(COV) -o $@ $^
+	$(CC) $(CFLAGS)  -o $@ $^
 
 
 ttt: ttt.c
-	$(CC) $(CFLAGS) $(COV) -o $@ $^
+	$(CC) $(CFLAGS)  -o $@ $^
 
 
 
 clean: 
-	rm -f mync ttt *.gcno *.gcda *.gcov
+	rm -f mync ttt 
