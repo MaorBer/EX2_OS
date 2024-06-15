@@ -8,7 +8,7 @@ all: mync ttt
 
 
 mync: mync.c
-	$(CC) $(CFLAGS) $(COV) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^
 
 
 ttt: ttt.c
