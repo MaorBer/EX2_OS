@@ -1,12 +1,12 @@
 
-# mync README
+# Operation Systems ariel Task 2
 
-This project provides a way to simulate a server and client setup using various networking protocols (TCP, UDP, UDS) and commands. The tool allows you to run a command (such as a tic-tac-toe game) on the server and communicate with it using network clients.
+This Task provides a way to simulate a server and client setup like NetCat using various networking protocols (TCP, UDP, UDS) and commands. The tool allows you to run a command (such as a tic-tac-toe game from question 1) on the server and communicate with it using network clients.
 
 ## Prerequisites
 - `nc` (netcat) for TCP and UDP communication.
 - `socat` for Unix Domain Socket (UDS) datagram communication.
-- A file named `run_commands` containing all the executable commands.
+- `gcc` for compilation.
 
 ## Example Usage
 
@@ -19,6 +19,13 @@ All of the commands that you can use are in the `run_commands` file.
 ### TCP Server and Client Communication
 
 #### Open a TCP server and wait for input from a client. Output goes to stdout.
+
+#### please start by running the make command.
+
+**MAKE:**
+```sh
+make
+```
 
 **Server:**
 ```sh
