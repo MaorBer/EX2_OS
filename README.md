@@ -153,6 +153,8 @@ socat - UNIX-SENDTO:hoi2.socket
 ## Notes
 - Replace `"./ttt 123456789"` with the actual command you want to run.
 - Ensure the `run_commands` file is properly set up with all the necessary commands.
-Authors:
-Maor Berenstein
-Daniel Bespalov
+
+
+## Authors:
+- Maor Berenstein
+- Daniel Bespalov
