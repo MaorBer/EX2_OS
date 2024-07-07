@@ -1,31 +1,27 @@
+# Operation Systems Ariel Task 2
 
-# Operation Systems ariel Task 2
-
-This Task provides a way to simulate a server and client setup like NetCat using various networking protocols (TCP, UDP, UDS) and commands. The tool allows you to run a command (such as a tic-tac-toe game from question 1) on the server and communicate with it using network clients.
+This task involves simulating a server and client setup similar to NetCat using various networking protocols (TCP, UDP, UDS) and commands. The server can execute a command (such as a tic-tac-toe game) and communicate with clients using different network protocols.
 
 ## Prerequisites
+
 - `nc` (netcat) for TCP and UDP communication.
 - `socat` for Unix Domain Socket (UDS) datagram communication.
 - `gcc` for compilation.
 
-## Example Usage
+## Compilation
 
-In all of the examples below, when we use the `-e` flag, we execute a command (in this case, a tic-tac-toe game that we implemented). We simulate a server & client with the `nc` command, and for the Unix Domain Socket datagram, we use the `socat` command.
+First, compile the project:
 
-### Commands Overview
-
-All of the commands that you can use are in the `run_commands` file.
-
-### TCP Server and Client Communication
-
-#### Open a TCP server and wait for input from a client. Output goes to stdout.
-
-#### please start by running the make command.
-
-**MAKE:**
 ```sh
 make
 ```
+
+
+### TCP Server and Client Communication
+
+#### Example 1: Open a TCP server and wait for input from a client. Output goes to stdout.
+
+
 
 **Server:**
 ```sh
@@ -37,7 +33,7 @@ make
 nc localhost 4269
 ```
 
-#### Open a TCP server and wait for input from a client. Output goes to client.
+#### Example 2: Open a TCP server and wait for input from a client. Output goes to the client.
 
 **Server:**
 ```sh
@@ -49,73 +45,43 @@ nc localhost 4269
 nc localhost 4269
 ```
 
-### UDP Server and Client Communication
-
-#### Open a UDP server and wait for input from a client. Output goes to a TCP server listening on port 6699.
-
-**TCP Server:**
-```sh
-nc -l -p 6699
-```
-
-**UDP Server & TCP Client:**
-```sh
-./mync -e "./ttt 123456789" -i UDPS4269 -o TCPClocalhost,6699
-```
-
-**UDP Client:**
-```sh
-nc -u localhost 4269
-```
 
 ### Unix Domain Socket Stream Server and Client Communication
 
 #### Open a UDS stream server and wait for input from a client. Output goes to a TCP server listening on port 6699.
 
-**TCP Server:**
+**(Output here)TCP Server:**
 ```sh
 nc -l -p 6699
 ```
 
 **UDS Stream Server & TCP Client:**
 ```sh
-./mync -e "./ttt 123456789" -i UDSSShoi.socket -o TCPClocalhost,6699
+./mync -e "ttt 123456789" -i UDSSShoi.socket -o TCPC127.0.0.1,6699
 ```
 
-**UDS Stream Client:**
+**(Input here)UDS Stream Client:**
 ```sh
 nc -U hoi.socket
 ```
 
 ### Unix Domain Socket Datagram Server and Client Communication
 
-#### Open a UDS datagram server and UDP server. The input is from the UDS client and the output goes to the UDP client.
+#### Example: UDS datagram server to TCP server
 
-**Servers:**
+**TCP Server:**
 ```sh
-./mync -e "./ttt 123456789" -i UDSSDhoi.socket -o UDPS4269
+nc -l -u -p 6699
 ```
 
-**UDS Client:**
+**UDS Datagram Server & TCP Client:**
 ```sh
-socat - UNIX-SENDTO:hoi.socket
+./mync -e "ttt 123456789" -i UDSDS6699 -o TCPC127.0.0.1,6699
 ```
 
-**UDP Client:**
+**UDS Datagram Client:**
 ```sh
-nc -u localhost 4269
-```
-
-### Chat Between Two Terminals
-
-**Terminal 1:**
-```sh
-./mync -b TCPS4269
-```
-
-**Terminal 2:**
-```sh
-./mync -b TCPClocalhost,4269
+socat - UNIX-CONNECT:UDSSThoi.socket
 ```
 
 ### Input from UDS Server and Output to UDS Client (Datagram)
@@ -158,8 +124,7 @@ socat - UNIX-SENDTO:hoi2.socket
     ```
 
 ## Notes
-- Replace `"./ttt 123456789"` with the actual command you want to run.
-- Ensure the `run_commands` file is properly set up with all the necessary commands.
+- Please run the commands as requested and all the examples from the task with combination of the original netcat as a server/client when needed.
 
 
 ## Authors:
